@@ -2,7 +2,6 @@ package model;
 
 import java.util.Arrays;
 
-import static java.lang.StrictMath.hypot;
 import static java.lang.StrictMath.min;
 
 /**
@@ -16,11 +15,11 @@ public final class World {
     private final Trooper[] troopers;
     private final Bonus[] bonuses;
     private final CellType[][] cells;
-    private final boolean[][][][][] cellVisibilities;
+    private final boolean[] cellVisibilities;
 
     public World(
             int moveIndex, int width, int height, Player[] players, Trooper[] troopers, Bonus[] bonuses,
-            CellType[][] cells, boolean[][][][][] cellVisibilities) {
+            CellType[][] cells, boolean[] cellVisibilities) {
         this.moveIndex = moveIndex;
         this.width = width;
         this.height = height;
@@ -95,13 +94,33 @@ public final class World {
     }
 
     /**
+     * Возвращает массив досягаемости различных клеток игрового мира из других клеток без учёта расстояния
+     * между ними.
+     * <p/>
+     * Боец в клетке {@code (objectX, objectY)} является досягаемым для бойца в клетке {@code (viewerX, viewerY)},
+     * если и только если {@code cellVisibilities[viewerX * height * width * height * stanceCount
+     * + viewerY * width * height * stanceCount
+     * + objectX * height * stanceCount
+     * + objectY * stanceCount
+     * + minStanceIndex]} равно {@code true}, где {@code height} --- высота мира в клетках,
+     * {@code width} --- ширина мира в клетках, {@code stanceCount} --- количество различных значений перечисления
+     * {@code TrooperStance}, а {@code minStanceIndex} --- минимальный из индексов стоек двух указанных бойцов
+     * (стойка {@code TrooperStance.PRONE} имеет индекс {@code 0}).
+     *
+     * @return Возвращает массив досягаемости.
+     */
+    public boolean[] getCellVisibilities() {
+        return Arrays.copyOf(cellVisibilities, cellVisibilities.length);
+    }
+
+    /**
      * Метод проверяет, является ли юнит, находящийся в клетке с координатами
      * ({@code objectX}, {@code objectY}) в стойке {@code objectStance},
      * досягаемым для юнита, находящегося в клетке с координатами
      * ({@code viewerX}, {@code viewerY}) в стойке {@code viewerStance}.
      * Может использоваться как для проверки видимости, так и для проверки возможности стрельбы.
-     *
-     * При проверке видимости бонуса его высота считается равной высоте бойца в стойке {@code PRONE}.
+     * <p/>
+     * При проверке видимости бонуса его высота считается равной высоте бойца в стойке {@code TrooperStance.PRONE}.
      *
      * @param maxRange     Дальность обзора/стрельбы наблюдающего юнита ({@code viewer}).
      * @param viewerX      X-координата наблюдающего юнита ({@code viewer}).
@@ -118,7 +137,24 @@ public final class World {
             int viewerX, int viewerY, TrooperStance viewerStance,
             int objectX, int objectY, TrooperStance objectStance) {
         int minStanceIndex = min(viewerStance.ordinal(), objectStance.ordinal());
-        return hypot(objectX - viewerX, objectY - viewerY) <= maxRange
-                && cellVisibilities[viewerX][viewerY][objectX][objectY][minStanceIndex];
+        int xRange = objectX - viewerX;
+        int yRange = objectY - viewerY;
+
+        return xRange * xRange + yRange * yRange <= maxRange * maxRange
+                && cellVisibilities[
+                viewerX * height * width * height * StanceCountHolder.STANCE_COUNT
+                        + viewerY * width * height * StanceCountHolder.STANCE_COUNT
+                        + objectX * height * StanceCountHolder.STANCE_COUNT
+                        + objectY * StanceCountHolder.STANCE_COUNT
+                        + minStanceIndex
+                ];
+    }
+
+    private static final class StanceCountHolder {
+        private static final int STANCE_COUNT = TrooperStance.values().length;
+
+        private StanceCountHolder() {
+            throw new UnsupportedOperationException();
+        }
     }
 }
